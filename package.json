@@ -1,13 +1,14 @@
 {
-  "name": "notify",
+  "name": "firestore-notifications-server",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "firebase-admin": "^11.5.0",
+    "dotenv": "^16.0.0",
     "expo-server-sdk": "^3.7.0",
-    "dotenv": "^16.0.3"
+    "firebase-admin": "^11.0.0",
+    "node-cron": "^3.0.0"
   }
 }
