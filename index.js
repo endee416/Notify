@@ -160,7 +160,7 @@ async function pollOrders() {
   }
 }
 
-setInterval(pollOrders, 60000);
+setInterval(pollOrders, 300000);
 console.log('Notification server started. Polling orders every 60 seconds.');
 
 // --------------------- DAILY NOTIFICATIONS CRON JOB ---------------------
