@@ -14,10 +14,9 @@ admin.initializeApp({
 const db = admin.firestore();
 const expo = new Expo();
 
-// ----- ORDER POLLING LOGIC -----
+// --------------------- ORDER POLLING LOGIC ---------------------
 
-// Use a variable to track the last time orders were polled.
-// You can initialize it as new Date(0) to catch all changes on first run
+// Track the last time we polled Firestore. (Using new Date(0) means we process all orders on first run.)
 let lastPollTime = new Date(0);
 
 // Helper function to send push notifications using expo-server-sdk
@@ -33,7 +32,6 @@ async function sendPushNotifications(messages) {
   }
 }
 
-// Poll orders from Firestore every 60 seconds and send notifications for new changes
 async function pollOrders() {
   console.log('Polling orders for changes since', lastPollTime);
   try {
@@ -42,10 +40,9 @@ async function pollOrders() {
       const order = doc.data();
       const orderId = doc.id;
 
-      // Determine which timestamp to use based on status.
+      // Determine the relevant timestamp based on order status.
       let lastChangeTime = new Date(0);
       if (order.status === 'pending') {
-        // Use createdAt when order is pending
         if (order.createdAt && order.createdAt.toDate) {
           lastChangeTime = order.createdAt.toDate();
         }
@@ -58,76 +55,84 @@ async function pollOrders() {
           lastChangeTime = order.dispatchtime.toDate();
         }
       } else if (order.status === 'completed') {
-        // For completed orders, choose one (here we use dispatchtime)
         if (order.dispatchtime && order.dispatchtime.toDate) {
           lastChangeTime = order.dispatchtime.toDate();
         }
       }
 
-      // Process only orders updated after the last poll time
-      if (lastChangeTime > lastPollTime) {
-        // Notification Logic:
+      // For orders not marked as completed, process only if updated since last poll.
+      if (order.status !== 'completed') {
+        if (lastChangeTime <= lastPollTime) return;
+      } else {
+        // For completed orders, if we've already notified, skip.
+        if (order.notifiedCompleted) return;
+      }
 
-        // 1. When status is 'pending': notify the vendor.
-        if (order.status === 'pending') {
-          const vendorSnapshot = await db.collection('users')
-            .where('uid', '==', order.vendoruid)
-            .get();
-          vendorSnapshot.forEach(async (vendorDoc) => {
-            const vendor = vendorDoc.data();
-            if (Expo.isExpoPushToken(vendor.pushToken)) {
-              const messages = [{
-                to: vendor.pushToken,
-                sound: 'default',
-                body: `New pending order: ${order.foodItem}`,
-                data: { orderId }
-              }];
-              await sendPushNotifications(messages);
-            }
-          });
-        }
+      // --- Notification Logic ---
 
-        // 2. When status is 'packaged' and no driver assigned: notify all drivers.
-        if (order.status === 'packaged' && (!order.driveruid || order.driveruid === '')) {
-          const driversSnapshot = await db.collection('users')
-            .where('role', '==', 'driver')
-            .get();
-          driversSnapshot.forEach(async (driverDoc) => {
-            const driver = driverDoc.data();
-            if (Expo.isExpoPushToken(driver.pushToken)) {
-              const messages = [{
-                to: driver.pushToken,
-                sound: 'default',
-                body: `New dispatch request for order: ${order.foodItem}`,
-                data: { orderId }
-              }];
-              await sendPushNotifications(messages);
-            }
-          });
-        }
+      // 1. When status is 'pending': Notify the vendor.
+      if (order.status === 'pending') {
+        const vendorSnapshot = await db.collection('users')
+          .where('uid', '==', order.vendoruid)
+          .get();
+        vendorSnapshot.forEach(async (vendorDoc) => {
+          const vendor = vendorDoc.data();
+          if (Expo.isExpoPushToken(vendor.pushToken)) {
+            const messages = [{
+              to: vendor.pushToken,
+              sound: 'default',
+              body: `New pending order: ${order.foodItem}`,
+              data: { orderId }
+            }];
+            await sendPushNotifications(messages);
+          }
+        });
+      }
 
-        // 3. When status is 'packaged' or 'dispatched': notify the customer.
-        if (order.status === 'packaged' || order.status === 'dispatched') {
-          const customerSnapshot = await db.collection('users')
-            .where('uid', '==', order.useruid)
-            .get();
-          customerSnapshot.forEach(async (customerDoc) => {
-            const customer = customerDoc.data();
-            if (Expo.isExpoPushToken(customer.pushToken)) {
-              const messages = [{
-                to: customer.pushToken,
-                sound: 'default',
-                body: `Your order (${order.foodItem}) is now ${order.status}`,
-                data: { orderId }
-              }];
-              await sendPushNotifications(messages);
-            }
-          });
-        }
+      // 2. When status is 'packaged' and no driver is assigned: Notify all drivers.
+      if (order.status === 'packaged' && (!order.driveruid || order.driveruid === '')) {
+        const driversSnapshot = await db.collection('users')
+          .where('role', '==', 'driver')
+          .get();
+        driversSnapshot.forEach(async (driverDoc) => {
+          const driver = driverDoc.data();
+          if (Expo.isExpoPushToken(driver.pushToken)) {
+            // Message no longer includes order details.
+            const messages = [{
+              to: driver.pushToken,
+              sound: 'default',
+              body: `New dispatch request available.`,
+              data: { orderId }
+            }];
+            await sendPushNotifications(messages);
+          }
+        });
+      }
 
-        // 4. When status is 'completed': notify vendor and driver (if assigned).
-        if (order.status === 'completed') {
-          // Notify vendor
+      // 3. When status is 'packaged' or 'dispatched': Notify the customer.
+      if (order.status === 'packaged' || order.status === 'dispatched') {
+        const customerSnapshot = await db.collection('users')
+          .where('uid', '==', order.useruid)
+          .get();
+        customerSnapshot.forEach(async (customerDoc) => {
+          const customer = customerDoc.data();
+          if (Expo.isExpoPushToken(customer.pushToken)) {
+            const messages = [{
+              to: customer.pushToken,
+              sound: 'default',
+              body: `Your order (${order.foodItem}) is now ${order.status}`,
+              data: { orderId }
+            }];
+            await sendPushNotifications(messages);
+          }
+        });
+      }
+
+      // 4. When status is 'completed': Notify vendor and driver.
+      if (order.status === 'completed') {
+        // Only process if not already notified
+        if (!order.notifiedCompleted) {
+          // Notify vendor (include order details)
           const vendorSnapshot = await db.collection('users')
             .where('uid', '==', order.vendoruid)
             .get();
@@ -143,7 +148,7 @@ async function pollOrders() {
               await sendPushNotifications(messages);
             }
           });
-          // Notify driver if assigned
+          // Notify driver if assigned (message without order details)
           if (order.driveruid) {
             const driverSnapshot = await db.collection('users')
               .where('uid', '==', order.driveruid)
@@ -154,13 +159,15 @@ async function pollOrders() {
                 const messages = [{
                   to: driver.pushToken,
                   sound: 'default',
-                  body: `Order ${order.foodItem} completed. Your account has been credited.`,
+                  body: `Your account has been credited.`,
                   data: { orderId }
                 }];
                 await sendPushNotifications(messages);
               }
             });
           }
+          // Mark order as notified for completion to avoid duplicate notifications
+          await updateDoc(doc.ref, { notifiedCompleted: true });
         }
       }
     });
@@ -175,7 +182,7 @@ async function pollOrders() {
 setInterval(pollOrders, 60000);
 console.log('Notification server started. Polling orders every 60 seconds.');
 
-// ----- DAILY NOTIFICATIONS CRON JOB -----
+// --------------------- DAILY NOTIFICATIONS CRON JOB ---------------------
 
 // Function to send daily notifications based on user roles
 async function sendDailyNotifications() {
