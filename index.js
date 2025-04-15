@@ -230,7 +230,7 @@ async function sendDailyNotifications() {
 }
 
 // Schedule the daily notifications cron job to run at 9 AM every day.
-cron.schedule('10 10 * * *', () => {
+cron.schedule('20 9 * * *', () => {
   console.log('Running daily notifications cron job at 9 AM.');
   sendDailyNotifications();
 });
