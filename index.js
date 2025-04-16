@@ -239,7 +239,7 @@ async function sendDailyNotifications() {
 }
 
 // Schedule the daily notifications cron job to run at 10:05 AM Nigeria time (9:05 AM UTC)
-cron.schedule('34 16 * * *', () => {
+cron.schedule('34 15 * * *', () => {
   console.log('Running daily notifications cron job at 9:05 UTC (10:05 Nigeria time).');
   sendDailyNotifications();
 });
