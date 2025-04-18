@@ -148,13 +148,13 @@ async function sendDailyNotifications() {
   const makeDaily = (token, body) => ({
     to: token,
     sound: 'default',
-    title: 'School Chow 🍔',
+    title: '🍲',
     body,
     data: { daily: true },
   });
 
   const roles = [
-    { role: 'regular_user', msg: u => `Hey ${u.firstname||'friend'}, wetin you wan chow today?` },
+    { role: 'regular_user', msg: u => `Yo ${u.firstname||'friend'}, Have you tried corner Garden's jollof? Stop playing!` },
     { role: 'vendor',       msg: u => `Hi ${u.firstname||'vendor'}, what's cooking today?` },
     { role: 'driver',       msg: u => `Hey ${u.firstname||'driver'}, ready for new delivery requests today?` },
   ];
@@ -173,7 +173,7 @@ async function sendDailyNotifications() {
 }
 
 // Schedule at 10:17 AM Nigeria (9:17 UTC)
-cron.schedule('35 8 * * *', () => {
+cron.schedule('55 8 * * *', () => {
   console.log('Cron triggered at', new Date().toISOString());
   sendDailyNotifications();
 });
