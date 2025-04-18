@@ -148,15 +148,15 @@ async function sendDailyNotifications() {
   const makeDaily = (token, body) => ({
     to: token,
     sound: 'default',
-    title: '🍲',
+    title: 'School Chow 🍔',
     body,
     data: { daily: true },
   });
 
   const roles = [
-    { role: 'regular_user', msg: u => `Yo ${u.firstname||'friend'}, Have you tried corner Garden's jollof? Stop playing!` },
-    { role: 'vendor',       msg: u => `Hi ${u.firstname||'vendor'}, what's cooking today?` },
-    { role: 'driver',       msg: u => `Hey ${u.firstname||'driver'}, ready for new delivery requests today?` },
+    { role: 'regular_user', msg: u => `Yo ${u.firstname||'friend'}, wetin you wan chow today?` },
+    { role: 'vendor',       msg: u => `Yo ${u.firstname||'vendor'}, what's cooking today?` },
+    { role: 'driver',       msg: u => `Yo ${u.firstname||'driver'}, ready to hit the road?` },
   ];
 
   for (const { role, msg } of roles) {
