@@ -6,7 +6,7 @@
 
 // 3. Utility: send push notification chunks async function sendPushNotifications(messages) { const chunks = expo.chunkPushNotifications(messages); for (const chunk of chunks) { try { const tickets = await expo.sendPushNotificationsAsync(chunk); console.log('Push tickets:', tickets); } catch (err) { console.error('Push error:', err); } } }
 
-// 4. Real-time listener for order status transitions const lastStatusMap = new Map(); let isInitialLoad = true;
+// 4. Real-time listener for order status transitions tconst lastStatusMap = new Map(); let isInitialLoad = true;
 
 db.collection('orders').onSnapshot( async (snapshot) => { if (isInitialLoad) { // Seed initial statuses snapshot.docs.forEach((doc) => lastStatusMap.set(doc.id, doc.data().status)); isInitialLoad = false; console.log('Initial order status cache populated'); return; }
 
@@ -31,7 +31,7 @@ for (const change of snapshot.docChanges()) {
     data: { orderId },
   });
 
-  // cart -> pending: notify vendor
+  // cart -> pending
   if (beforeStatus === 'cart' && afterStatus === 'pending') {
     const vsnap = await db.collection('users').where('uid', '==', data.vendoruid).get();
     vsnap.forEach((doc) => {
@@ -44,7 +44,7 @@ for (const change of snapshot.docChanges()) {
     });
   }
 
-  // pending -> packaged: notify drivers
+  // pending -> packaged
   if (beforeStatus === 'pending' && afterStatus === 'packaged' && !data.driveruid) {
     const dsnap = await db.collection('users').where('role', '==', 'driver').get();
     dsnap.forEach((doc) => {
@@ -57,7 +57,7 @@ for (const change of snapshot.docChanges()) {
     });
   }
 
-  // any -> dispatched: notify customer
+  // any -> dispatched
   if (afterStatus === 'dispatched') {
     const csnap = await db.collection('users').where('uid', '==', data.useruid).get();
     csnap.forEach((doc) => {
@@ -70,9 +70,8 @@ for (const change of snapshot.docChanges()) {
     });
   }
 
-  // dispatched -> completed: notify vendor & driver
+  // dispatched -> completed
   if (beforeStatus === 'dispatched' && afterStatus === 'completed') {
-    // vendor
     const vsnap2 = await db.collection('users').where('uid', '==', data.vendoruid).get();
     vsnap2.forEach((doc) => {
       const v = doc.data();
@@ -82,7 +81,6 @@ for (const change of snapshot.docChanges()) {
         );
       }
     });
-    // driver
     if (data.driveruid) {
       const dsnap2 = await db.collection('users').where('uid', '==', data.driveruid).get();
       dsnap2.forEach((doc) => {
@@ -105,15 +103,17 @@ for (const change of snapshot.docChanges()) {
 
 console.log('Real-time order listener active');
 
-// 5. Daily notifications cron job async function sendDailyNotifications() { console.log('Running daily notifications'); const makeMessage = (token, body) => ({ to: token, sound: 'default', title: 'School Chow 🍔', body, data: { daily: true }, });
+// 5. Daily notifications cron job 
+async function sendDailyNotifications() { console.log('Running daily notifications'); const makeDaily = (token, body) => ({ to: token, sound: 'default', title: 'School Chow 🍔', body, data: { daily: true }, });
 
 const roles = [ { role: 'regular_user', body: (u) => Hey ${u.firstname || 'friend'}, wetin you wan chow today? }, { role: 'vendor', body: (u) => Hi ${u.firstname || 'vendor'}, what's cooking today? }, { role: 'driver', body: (u) => Hey ${u.firstname || 'driver'}, ready for new delivery requests today? }, ];
 
-for (const { role, body } of roles) { const snap = await db.collection('users').where('role', '==', role).get(); snap.forEach((doc) => { const u = doc.data(); if (Expo.isExpoPushToken(u.pushToken)) { sendPushNotifications([makeMessage(u.pushToken, body(u))]); } }); }
+for (const { role, body } of roles) { const snap = await db.collection('users').where('role', '==', role).get(); snap.forEach((doc) => { const u = doc.data(); if (Expo.isExpoPushToken(u.pushToken)) { sendPushNotifications([makeDaily(u.pushToken, body(u))]); } }); }
 
 console.log('Daily notifications sent'); }
 
-// Schedule daily at 10:17 AM Nigeria (9:17 UTC) cron.schedule('22 8 * * *', () => { console.log('Triggering daily cron at', new Date().toISOString()); sendDailyNotifications(); });
+// Cron schedule: daily at 10:17 AM Nigeria (9:17 UTC) 
+cron.schedule('30 8 * * *', () => { console.log('Cron triggered at', new Date().toISOString()); sendDailyNotifications(); });
 
 console.log('Daily notifications cron scheduled');
 
