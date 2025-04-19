@@ -44,13 +44,34 @@ db.collection('orders').onSnapshot(
     }
 
     for (const change of snapshot.docChanges()) {
-      if (change.type !== 'modified') continue;
-
       const orderId = change.doc.id;
-      const beforeStatus = lastStatusMap.get(orderId);
       const data = change.doc.data();
       const afterStatus = data.status;
-      lastStatusMap.set(orderId, afterStatus);
+      const beforeStatus = lastStatusMap.get(orderId);
+
+      // ← ADDED HANDLER: New orders that start in pending
+      if (change.type === 'added' && afterStatus === 'pending') {
+        console.log(`New pending order ${orderId}, notifying vendor`);
+        const vsnap = await db.collection('users')
+          .where('uid', '==', data.vendoruid)
+          .get();
+        vsnap.forEach(doc => {
+          const u = doc.data();
+          if (Expo.isExpoPushToken(u.pushToken)) {
+            sendPushNotifications([{
+              to: u.pushToken,
+              sound: 'default',
+              title: 'School Chow 🍔',
+              body: `Hi ${u.firstname||'there'}! New pending order: ${data.foodItem}`,
+              data: { orderId },
+            }]);
+          }
+        });
+        lastStatusMap.set(orderId, afterStatus);
+        continue;
+      }
+
+      if (change.type !== 'modified') continue;
 
       if (beforeStatus === afterStatus) continue;
       console.log(`Order ${orderId} status changed: ${beforeStatus} -> ${afterStatus}`);
@@ -66,7 +87,9 @@ db.collection('orders').onSnapshot(
 
       // cart -> pending: vendor
       if (beforeStatus === 'cart' && afterStatus === 'pending') {
-        const vsnap = await db.collection('users').where('uid', '==', data.vendoruid).get();
+        const vsnap = await db.collection('users')
+          .where('uid', '==', data.vendoruid)
+          .get();
         vsnap.forEach(doc => {
           const u = doc.data();
           if (Expo.isExpoPushToken(u.pushToken)) {
@@ -79,7 +102,9 @@ db.collection('orders').onSnapshot(
 
       // pending -> packaged (no driver): drivers
       if (beforeStatus === 'pending' && afterStatus === 'packaged' && !data.driveruid) {
-        const dsnap = await db.collection('users').where('role', '==', 'driver').get();
+        const dsnap = await db.collection('users')
+          .where('role', '==', 'driver')
+          .get();
         dsnap.forEach(doc => {
           const d = doc.data();
           if (Expo.isExpoPushToken(d.pushToken)) {
@@ -92,7 +117,9 @@ db.collection('orders').onSnapshot(
 
       // any -> dispatched: customer
       if (afterStatus === 'dispatched') {
-        const csnap = await db.collection('users').where('uid', '==', data.useruid).get();
+        const csnap = await db.collection('users')
+          .where('uid', '==', data.useruid)
+          .get();
         csnap.forEach(doc => {
           const c = doc.data();
           if (Expo.isExpoPushToken(c.pushToken)) {
@@ -105,8 +132,9 @@ db.collection('orders').onSnapshot(
 
       // dispatched -> completed: vendor + driver
       if (beforeStatus === 'dispatched' && afterStatus === 'completed') {
-        // vendor
-        const vsnap2 = await db.collection('users').where('uid', '==', data.vendoruid).get();
+        const vsnap2 = await db.collection('users')
+          .where('uid', '==', data.vendoruid)
+          .get();
         vsnap2.forEach(doc => {
           const v = doc.data();
           if (Expo.isExpoPushToken(v.pushToken)) {
@@ -115,9 +143,10 @@ db.collection('orders').onSnapshot(
             );
           }
         });
-        // driver
         if (data.driveruid) {
-          const dsnap2 = await db.collection('users').where('uid', '==', data.driveruid).get();
+          const dsnap2 = await db.collection('users')
+            .where('uid', '==', data.driveruid)
+            .get();
           dsnap2.forEach(doc => {
             const dv = doc.data();
             if (Expo.isExpoPushToken(dv.pushToken)) {
@@ -132,6 +161,9 @@ db.collection('orders').onSnapshot(
       if (messages.length > 0) {
         await sendPushNotifications(messages);
       }
+
+      // update cache
+      lastStatusMap.set(orderId, afterStatus);
     }
   },
   (error) => {
