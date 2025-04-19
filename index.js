@@ -34,7 +34,7 @@ let isInitialLoad = true;
 db.collection('orders').onSnapshot(
   async (snapshot) => {
     if (isInitialLoad) {
-      // Seed initial statuses
+      // Cache initial statuses so we don’t fire on existing data
       snapshot.docs.forEach(doc =>
         lastStatusMap.set(doc.id, doc.data().status)
       );
@@ -44,37 +44,22 @@ db.collection('orders').onSnapshot(
     }
 
     for (const change of snapshot.docChanges()) {
+      if (change.type !== 'modified') continue;
+
       const orderId = change.doc.id;
       const data = change.doc.data();
       const afterStatus = data.status;
-      const beforeStatus = lastStatusMap.get(orderId);
 
-      // ← ADDED HANDLER: New orders that start in pending
-      if (change.type === 'added' && afterStatus === 'pending') {
-        console.log(`New pending order ${orderId}, notifying vendor`);
-        const vsnap = await db.collection('users')
-          .where('uid', '==', data.vendoruid)
-          .get();
-        vsnap.forEach(doc => {
-          const u = doc.data();
-          if (Expo.isExpoPushToken(u.pushToken)) {
-            sendPushNotifications([{
-              to: u.pushToken,
-              sound: 'default',
-              title: 'School Chow 🍔',
-              body: `Hi ${u.firstname||'there'}! New pending order: ${data.foodItem}`,
-              data: { orderId },
-            }]);
-          }
-        });
-        lastStatusMap.set(orderId, afterStatus);
-        continue;
-      }
+      // ★ default any missing "before" to 'cart'
+      const beforeStatus = lastStatusMap.has(orderId)
+        ? lastStatusMap.get(orderId)
+        : 'cart';
 
-      if (change.type !== 'modified') continue;
+      // update cache
+      lastStatusMap.set(orderId, afterStatus);
 
       if (beforeStatus === afterStatus) continue;
-      console.log(`Order ${orderId} status changed: ${beforeStatus} -> ${afterStatus}`);
+      console.log(`Order ${orderId} status changed: ${beforeStatus} → ${afterStatus}`);
 
       const messages = [];
       const makeMsg = (token, body) => ({
@@ -85,7 +70,7 @@ db.collection('orders').onSnapshot(
         data: { orderId },
       });
 
-      // cart -> pending: vendor
+      // cart → pending: notify vendor
       if (beforeStatus === 'cart' && afterStatus === 'pending') {
         const vsnap = await db.collection('users')
           .where('uid', '==', data.vendoruid)
@@ -94,13 +79,13 @@ db.collection('orders').onSnapshot(
           const u = doc.data();
           if (Expo.isExpoPushToken(u.pushToken)) {
             messages.push(
-              makeMsg(u.pushToken, `Hi ${u.firstname||'there'}! New pending order: ${data.foodItem}`)
+              makeMsg(u.pushToken, `Hi ${u.firstname || 'there'}! New pending order: ${data.foodItem}`)
             );
           }
         });
       }
 
-      // pending -> packaged (no driver): drivers
+      // pending → packaged (no driver): notify all drivers
       if (beforeStatus === 'pending' && afterStatus === 'packaged' && !data.driveruid) {
         const dsnap = await db.collection('users')
           .where('role', '==', 'driver')
@@ -109,13 +94,13 @@ db.collection('orders').onSnapshot(
           const d = doc.data();
           if (Expo.isExpoPushToken(d.pushToken)) {
             messages.push(
-              makeMsg(d.pushToken, `Hey ${d.firstname||'driver'}! New dispatch request available.`)
+              makeMsg(d.pushToken, `Hey ${d.firstname || 'driver'}! New dispatch request available.`)
             );
           }
         });
       }
 
-      // any -> dispatched: customer
+      // any → dispatched: notify customer
       if (afterStatus === 'dispatched') {
         const csnap = await db.collection('users')
           .where('uid', '==', data.useruid)
@@ -130,8 +115,9 @@ db.collection('orders').onSnapshot(
         });
       }
 
-      // dispatched -> completed: vendor + driver
+      // dispatched → completed: notify vendor + driver
       if (beforeStatus === 'dispatched' && afterStatus === 'completed') {
+        // vendor
         const vsnap2 = await db.collection('users')
           .where('uid', '==', data.vendoruid)
           .get();
@@ -143,6 +129,7 @@ db.collection('orders').onSnapshot(
             );
           }
         });
+        // driver
         if (data.driveruid) {
           const dsnap2 = await db.collection('users')
             .where('uid', '==', data.driveruid)
@@ -161,9 +148,6 @@ db.collection('orders').onSnapshot(
       if (messages.length > 0) {
         await sendPushNotifications(messages);
       }
-
-      // update cache
-      lastStatusMap.set(orderId, afterStatus);
     }
   },
   (error) => {
@@ -186,9 +170,9 @@ async function sendDailyNotifications() {
   });
 
   const roles = [
-    { role: 'regular_user', msg: u => `Yo ${u.firstname||'friend'}, wetin you wan chow today?` },
-    { role: 'vendor',       msg: u => `Yo ${u.firstname||'vendor'}, what's cooking today?` },
-    { role: 'driver',       msg: u => `Yo ${u.firstname||'driver'}, ready to hit the road?` },
+    { role: 'regular_user', msg: u => `Yo ${u.firstname || 'friend'}, wetin you wan chow today?` },
+    { role: 'vendor',       msg: u => `Yo ${u.firstname || 'vendor'}, what's cooking today?` },
+    { role: 'driver',       msg: u => `Yo ${u.firstname || 'driver'}, ready to hit the road?` },
   ];
 
   for (const { role, msg } of roles) {
