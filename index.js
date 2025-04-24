@@ -70,7 +70,7 @@ db.collection('orders').onSnapshot(
         data: { orderId },
       });
 
-      // cart → pending: notify vendor
+      // cart → pending: notify vendor with custom sound/channel
       if (beforeStatus === 'cart' && afterStatus === 'pending') {
         const vsnap = await db.collection('users')
           .where('uid', '==', data.vendoruid)
@@ -78,14 +78,19 @@ db.collection('orders').onSnapshot(
         vsnap.forEach(doc => {
           const u = doc.data();
           if (Expo.isExpoPushToken(u.pushToken)) {
-            messages.push(
-              makeMsg(u.pushToken, `Hi ${u.firstname || 'there'}! New pending order: ${data.foodItem}`)
-            );
+            messages.push({
+              to: u.pushToken,
+              channelId: 'default', // Android channel
+              sound: 'chow.wav',    // custom sound
+              title: 'School Chow 🍔',
+              body: `Hi ${u.firstname || 'there'}! New pending order: ${data.foodItem}`,
+              data: { orderId },
+            });
           }
         });
       }
 
-      // pending → packaged (no driver): notify all drivers
+      // pending → packaged (no driver): notify all drivers with custom sound
       if (beforeStatus === 'pending' && afterStatus === 'packaged' && !data.driveruid) {
         const dsnap = await db.collection('users')
           .where('role', '==', 'driver')
@@ -93,9 +98,14 @@ db.collection('orders').onSnapshot(
         dsnap.forEach(doc => {
           const d = doc.data();
           if (Expo.isExpoPushToken(d.pushToken)) {
-            messages.push(
-              makeMsg(d.pushToken, `Hey ${d.firstname || 'driver'}! New dispatch request available.`)
-            );
+            messages.push({
+              to: d.pushToken,
+              channelId: 'default', // Android channel
+              sound: 'chow.wav',    // custom sound
+              title: 'School Chow 🍔',
+              body: `Hey ${d.firstname || 'driver'}! New dispatch request available.`,
+              data: { orderId },
+            });
           }
         });
       }
@@ -195,3 +205,4 @@ cron.schedule('55 8 * * *', () => {
 });
 
 console.log('Daily notifications cron scheduled');
+
