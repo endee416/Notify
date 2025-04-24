@@ -64,6 +64,7 @@ db.collection('orders').onSnapshot(
       const messages = [];
       const makeMsg = (token, body) => ({
         to: token,
+        channelId: 'default',
         sound: 'default',
         title: 'School Chow 🍔',
         body,
@@ -173,6 +174,7 @@ async function sendDailyNotifications() {
 
   const makeDaily = (token, body) => ({
     to: token,
+    channelId: 'default',
     sound: 'default',
     title: 'School Chow 🍔',
     body,
