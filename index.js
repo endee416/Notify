@@ -190,7 +190,7 @@ async function sendDailyNotifications() {
   for (const { role, msg } of roles) {
     const snap = await db.collection('users').where('role', '==', role).get();
     snap.forEach(doc => {
-      const u = doc.data();.qw
+      const u = doc.data();
       if (Expo.isExpoPushToken(u.pushToken)) {
         sendPushNotifications([ makeDaily(u.pushToken, msg(u)) ]);
       }
@@ -201,7 +201,7 @@ async function sendDailyNotifications() {
 }
 
 // Schedule at 10:17 AM Nigeria (9:17 UTC)
-cron.schedule('2 15 * * *', () => {
+cron.schedule('10 15 * * *', () => {
   console.log('Cron triggered at', new Date().toISOString());
   sendDailyNotifications();
 });
