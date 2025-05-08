@@ -182,9 +182,9 @@ async function sendDailyNotifications() {
   });
 
   const roles = [
-    { role: 'regular_user', msg: u => `Yo ${u.firstname || 'friend'}, wetin you wan chow today?` },
-    { role: 'vendor',       msg: u => `Yo ${u.firstname || 'vendor'}, what's cooking today?` },
-    { role: 'driver',       msg: u => `Yo ${u.firstname || 'driver'}, ready to hit the road?` },
+    { role: 'regular_user', msg: u => `Yo ${u.firstname || 'friend'}, Our kitchen had a techy tummy ache… but we’ve rebooted the stove! School Chow is back online and hotter than fresh jollof. Let’s chow like nothing happened!` },
+    { role: 'vendor',       msg: u => `Yo ${u.firstname || 'vendor'}, Our kitchen had a techy tummy ache… but we’ve rebooted the stove! School Chow is back online and hotter than fresh jollof. Let’s chow like nothing happened!` },
+    { role: 'driver',       msg: u => `Yo ${u.firstname || 'driver'}, Our kitchen had a techy tummy ache… but we’ve rebooted the stove! School Chow is back online and hotter than fresh jollof. Let’s chow like nothing happened!` },
   ];
 
   for (const { role, msg } of roles) {
@@ -201,7 +201,7 @@ async function sendDailyNotifications() {
 }
 
 // Schedule at 10:17 AM Nigeria (9:17 UTC)
-cron.schedule('55 8 * * *', () => {
+cron.schedule('51 14 * * *', () => {
   console.log('Cron triggered at', new Date().toISOString());
   sendDailyNotifications();
 });
