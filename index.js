@@ -221,14 +221,33 @@ console.log('Daily notifications cron scheduled');
 const appServer = express();
 appServer.use(bodyParser.json());
 
-// POST /notify
+// Only allow calls from this verified email
+const ONLY_ADMIN_EMAIL = 'rombek325@gmail.com';
+
 appServer.post('/notify', async (req, res) => {
+  const authHeader = req.get('Authorization') || '';
+  const match = authHeader.match(/^Bearer (.+)$/);
+  if (!match) {
+    return res.status(401).json({ error: 'Missing auth token' });
+  }
+  const idToken = match[1];
+
+  // Verify token and check email
+  try {
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    if (decoded.email !== ONLY_ADMIN_EMAIL) {
+      return res.status(403).json({ error: 'Forbidden: not authorized' });
+    }
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid auth token' });
+  }
+
   const { category, title, message } = req.body;
   if (!title || !message) {
     return res.status(400).json({ error: 'title and message are required' });
   }
 
-  // Map category to one or more Firestore roles
+  // Map category to roles
   const roles = category === 'All'
     ? ['regular_user','vendor','driver']
     : category === 'Foodies'
@@ -242,7 +261,6 @@ appServer.post('/notify', async (req, res) => {
     const snap = await db.collection('users')
       .where('role', '==', role)
       .get();
-
     snap.forEach(doc => {
       const u = doc.data();
       if (Expo.isExpoPushToken(u.pushToken)) {
@@ -267,9 +285,8 @@ appServer.post('/notify', async (req, res) => {
   }
 });
 
-// Start listening
+// Start Express
 const PORT = process.env.PORT || 3000;
 appServer.listen(PORT, () => {
   console.log(`Notification endpoint listening on port ${PORT}`);
 });
-
