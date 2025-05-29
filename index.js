@@ -1,4 +1,9 @@
 // index.js
+// Add at top of file:
+const express = require('express');
+const bodyParser = require('body-parser');
+
+
 require('dotenv').config();
 const admin = require('firebase-admin');
 const { Expo } = require('expo-server-sdk');
@@ -207,4 +212,64 @@ cron.schedule('55 8 * * *', () => {
 });
 
 console.log('Daily notifications cron scheduled');
+
+
+
+// … after your cron schedule …
+
+// 6. Stand up a simple Express server to receive /notify
+const appServer = express();
+appServer.use(bodyParser.json());
+
+// POST /notify
+appServer.post('/notify', async (req, res) => {
+  const { category, title, message } = req.body;
+  if (!title || !message) {
+    return res.status(400).json({ error: 'title and message are required' });
+  }
+
+  // Map category to one or more Firestore roles
+  const roles = category === 'All'
+    ? ['regular_user','vendor','driver']
+    : category === 'Foodies'
+      ? ['regular_user']
+      : category === 'Vendors'
+        ? ['vendor']
+        : ['driver'];
+
+  const messages = [];
+  for (const role of roles) {
+    const snap = await db.collection('users')
+      .where('role', '==', role)
+      .get();
+
+    snap.forEach(doc => {
+      const u = doc.data();
+      if (Expo.isExpoPushToken(u.pushToken)) {
+        messages.push({
+          to: u.pushToken,
+          channelId: 'default',
+          sound: 'default',
+          title,
+          body: message,
+          data: { via: 'bulk-notify' }
+        });
+      }
+    });
+  }
+
+  try {
+    await sendPushNotifications(messages);
+    return res.json({ success: true, sent: messages.length });
+  } catch (err) {
+    console.error('Bulk notify error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Start listening
+const PORT = process.env.PORT || 3000;
+appServer.listen(PORT, () => {
+  console.log(`Notification endpoint listening on port ${PORT}`);
+});
 
