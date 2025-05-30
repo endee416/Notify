@@ -186,6 +186,31 @@ db.collection('orders').onSnapshot(
         });
       }
 
+
+      // ----- NEW: dispatched → packaged (no driver assigned) → notify ALL drivers -----
+if (beforeStatus === 'dispatched'
+    && afterStatus === 'packaged'
+    && !data.driveruid
+) {
+  const driversSnapshot = await db.collection('users')
+    .where('role', '==', 'driver')
+    .get();
+
+  driversSnapshot.forEach(doc => {
+    const driver = doc.data();
+    if (Expo.isExpoPushToken(driver.pushToken)) {
+      messages.push({
+        to: driver.pushToken,
+        channelId: 'default',
+        sound: 'chow.wav',    // same custom sound as your pending→packaged
+        title: 'School Chow 🍔',
+        body: `Hey ${driver.firstname || 'driver'}! New dispatch request available.`,
+        data: { orderId },
+      });
+    }
+  });
+}
+
       // finally send anything we’ve collected
 
 
