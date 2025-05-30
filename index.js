@@ -161,6 +161,34 @@ db.collection('orders').onSnapshot(
         }
       }
 
+
+
+      // … your existing dispatched→completed block ends here …
+
+      // ----- NEW: ANY → REFUNDED: notify customer with apology -----
+      if (
+        afterStatus === 'refunded'
+        && ['pending', 'packaged', 'dispatched'].includes(beforeStatus)
+      ) {
+        const csnap2 = await db.collection('users')
+          .where('uid', '==', data.useruid)
+          .get();
+        csnap2.forEach(doc => {
+          const c = doc.data();
+          if (Expo.isExpoPushToken(c.pushToken)) {
+            messages.push(
+              makeMsg(
+                c.pushToken,
+                `Hi ${c.firstname || 'there'}! Your order (${data.foodItem}) has been refunded. We're sorry for the inconveniences this may have caused.`
+              )
+            );
+          }
+        });
+      }
+
+      // finally send anything we’ve collected
+
+
       if (messages.length > 0) {
         await sendPushNotifications(messages);
       }
